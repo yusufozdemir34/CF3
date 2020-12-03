@@ -9,6 +9,7 @@ from classes import isaverage
 from ccl import connected_component_labelling
 from antgraph import AntGraph
 import antcolony
+from scipy.stats import pearsonr
 # verilerin tutulacağı diziler
 user = []
 item = []
@@ -54,8 +55,8 @@ movie_genre = np.array(movie_genre)
 print(movie_genre.size)
 print(movie_genre.ndim)
 
-
-
+# clusteri kaldirdiğimizda ortalamayı nasıl bulup ekleyeceğiz.
+# prediction daki [cluster.labels_[j] yerine ne ekleycegiz
 cluster = KMeans(n_clusters=19)
 cluster.fit_predict(movie_genre)
 # modell uygulanması.
@@ -68,6 +69,7 @@ for i in range(0, n_users):
     tmp = []
     for m in range(0, 19):
         tmp.append([])
+        # n. kullanıcı için [0-19]'a kadar cluster için verilen oylar
     for j in range(0, n_items):
         if utility[i][j] != 0:
             tmp[cluster.labels_[j] - 1].append(utility[i][j])
@@ -87,17 +89,15 @@ for i in range(0, n_users):
     x = utility_clustered[i]
     user[i].avg_r = sum(a for a in x if a > 0) / sum(a > 0 for a in x)
 
-
-
 pcs_matrix = np.zeros((n_users, n_users))
 for i in range(0, n_users):
     for j in range(0, i):
         if i != j:
-            pcs_matrix[i][j] = pearson(i + 1, j + 1,utility_clustered,user)
+            pcs_matrix[i][j] = pearson(i + 1, j + 1, utility_clustered, user)
 
 print("\rSimilarity Matrix [%d:%d] = %f" % (i + 1, j + 1, pcs_matrix[i][j]))
 
-print(pcs_matrix)
+# print(pcs_matrix)
 graph = AntGraph(n_users, pcs_matrix)
 graph.reset_tau()
 num_iterations = 5
@@ -107,15 +107,22 @@ ant_colony.start()
 graph.delta_mat = isaverage(graph.delta_mat)
 result = connected_component_labelling(graph.delta_mat, 4)
 
+clusterNumber = result.max()
+clusterUser = []
+for m in range(0, clusterNumber):
+    clusterUser.append([])
+for i in range(0, len(result)):
+    for j in range(0, 3):  # len(result[i])):
+        clusterUser[result(i, j) - 1].append(i)
+
 utility_copy = np.copy(utility_clustered)
 for i in range(0, n_users):
     for j in range(0, 19):
         if utility_copy[i][j] == 0:
-            utility_copy[i][j] = predict(i + 1, j + 1, 50,n_users,result,user,utility_clustered)
+            utility_copy[i][j] = predict(i + 1, j + 1, 50, n_users, result, user, utility_clustered)
 # print("\rPrediction [User:Rating] = [%d:%d]" % (i, j))
 
 print(utility_copy)
-
 
 # test datası ile tehmin arasında MSE
 y_true = []
