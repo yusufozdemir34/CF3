@@ -3,11 +3,12 @@ import time
 import math
 import re
 import pickle
-
+from sklearn.neighbors import KNeighborsClassifier
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import KFold
+from scipy.stats import pearsonr
 
 
 class User:
@@ -114,12 +115,12 @@ def pearson(x, y, utility_clustered, user):
 # user_id - oyu tahmin edilecek user
 # i_id - kullanıcının tahmin edilecek oyu verdiği item clusterı
 # top_n - bu benzerlik hesabı için kullanılacak benzer user sayısı.
-def predict(user_id, i_id, top_n, n_users, pcs_matrix, user, utility_clustered):
+def predict(user_id, i_id, top_n, n_users, pcs_matrix, user, clustered_user, clusternumber):
     similarity = []
     for i in range(0, n_users):
         if i + 1 != user_id:
             similarity.append(pcs_matrix[user_id - 1][i])
-    temp = norm(n_users, utility_clustered, user)
+    temp = norm(n_users, clustered_user, user, clusternumber)
     temp = np.delete(temp, user_id - 1, 0)
     top = [x for (y, x) in sorted(zip(similarity, temp), key=lambda pair: pair[0], reverse=True)]
     # top: benzerlik ve oylama matrislerinin zip ile eşleşmesi sonucu sorted ile sıralanması ile
@@ -142,14 +143,16 @@ def predict(user_id, i_id, top_n, n_users, pcs_matrix, user, utility_clustered):
         return rate
 
 
-def norm(n_users, utility_clustered, user):
-    normalize = np.zeros((n_users, 19))
-    for i in range(0, n_users):
-        for j in range(0, 19):
-            if utility_clustered[i][j] != 0:
-                normalize[i][j] = utility_clustered[i][j] - user[i].avg_r
+def norm(n_users, clustered_user, user, clusternumber):
+    normalize = np.zeros((clusternumber, n_users))
+    for i in range(0, clusternumber):
+        j = 0
+        for clustered in clustered_user[i]:
+            if clustered != 0:
+                normalize[i][j] = clustered - user[i].avg_r
             else:
                 normalize[i][j] = float('Inf')
+            j = j + 1
     return normalize
 
 
@@ -157,8 +160,97 @@ def isaverage(delta_mat):
     avg = delta_mat.mean()
     for i in range(0, np.size(delta_mat, 0)):
         for j in range(0, np.size(delta_mat, 1)):
-            if delta_mat[i][j] > avg:
+            if delta_mat[i][j] > avg / 1000:
                 delta_mat[i][j] = 1
             else:
                 delta_mat[i][j] = 0
     return delta_mat
+
+
+def cluster_means(utility, clusters):
+    cluster_avg = []
+    # calculate average of each line (user)
+
+    for i in range(0, len(clusters) - 1):
+        temp = []
+        for cluster in clusters[i]:
+            temp.append(utility[cluster])
+        cluster_avg.append(np.mean(temp))
+
+        # for j in range(0, len(clusters[i]) - 1):
+        #   temp.append(utility[clusters[i][j]])
+        # cluster_avg.append(np.mean(temp))
+
+    return cluster_avg
+
+
+def createCluster(result):
+    clusterNumber = result.max()
+    clusterUser = []
+    for m in range(0, clusterNumber):
+        clusterUser.append(set())
+    for i in range(0, len(result)):
+        for j in range(0, len(result[i])):
+            try:
+                clusterUser[result[i][j]].add(i)
+            except:
+                print("An exception occurred", i, j, result[i][j])
+    return clusterUser
+
+
+def create_avg_user(user, n_users, utility_clustered):
+    # her kullanıcının verdiği oyların ortalamaları User objesinde tutuluyor.
+    for i in range(0, n_users):
+        x = utility_clustered[i]
+        user[i].avg_r = sum(a for a in x if a > 0) / sum(a > 0 for a in x)
+    return user
+
+
+# user_id - oyu tahmin edilecek user
+# i_id - kullanıcının tahmin edilecek oyu verdiği item clusterı
+# top_n - bu benzerlik hesabı için kullanılacak benzer user sayısı.
+def prediction_user_rating(user_id, i_id, top_n, n_users, pcs_matrix, user, utility_clustered, clusternumber):
+    similarity = []
+    for i in range(0, n_users):
+        if i + 1 != user_id:
+            similarity.append(pcs_matrix[user_id - 1][i])
+    temp = norm(n_users, utility_clustered, user, clusternumber)
+    temp = np.delete(temp, user_id - 1, 0)
+    top = [x for (y, x) in sorted(zip(similarity, temp), key=lambda pair: pair[0], reverse=True)]
+    # top: benzerlik ve oylama matrislerinin zip ile eşleşmesi sonucu sorted ile sıralanması ile
+    # en yüksek benzerlik oranına sahip bireylerin oylarını saklar.
+    s = 0
+    c = 0
+    for i in range(0, top_n):
+        if top[i][i_id - 1] != float(
+                'Inf'):  # infinitive : sınırsız bir üst değer işlevi görür. bu işin sonuna kadar yani
+            s += top[i][i_id - 1]  # top'daki oyların toplamı
+            c += 1  # oy sayısı. bu hem ortalama için hem de oy olup olmadığı kontrolü için
+    rate = user[user_id - 1].avg_r if c == 0 else s / float(c) + user[user_id - 1].avg_r
+    # eğer hiç oy yoksa kullanıcının kendi ortalama oyunu kabul et
+    # oy varsa en benzer kullanıcıların o film için verdiği oyların ortalamasını kullanıcı için ata. USER-BASED
+    if rate < 1.0:
+        return 1.0
+    elif rate > 5.0:
+        return 5.0
+    else:
+        return rate
+
+
+def prediction_user_rating(X_train, y_train, X_test):
+    # Create KNN Classifier
+    knn = KNeighborsClassifier(n_neighbors=5)
+    model = KNeighborsClassifier(n_neighbors=3)
+
+    # Train the model using the training sets
+    # model.fit(features, label)
+
+    # Predict Output
+    predicted = model.predict([[0, 2]])  # 0:Overcast, 2:Mild
+
+    # Train the model using the training sets
+    knn.fit(X_train, y_train)
+
+    # Predict the response for test dataset
+    y_pred = knn.predict(X_test)
+    return y_pred
