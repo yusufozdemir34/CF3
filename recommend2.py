@@ -2,92 +2,51 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 
-from classes import Dataset, createCluster, cluster_means, create_avg_user
-from classes import pearson
+from classes import Dataset, createCluster, cluster_means, create_avg_user, \
+    ant_colony_optimization, recommend_init
 from classes import predict
-from classes import isaverage
-from ccl import connected_component_labelling
-from antgraph import AntGraph
-import antcolony
-from scipy.stats import pearsonr
-from knn import KNNalgorithm
 
-# verilerin tutulacağı diziler
-user = []
-item = []
 
-rating = []
-rating_test = []
+class Recommend_cold_start:
+    def generate_init(self):
+        # verilerin tutulacağı diziler
+        user, item, rating, rating_test, test, pcs_matrix, utility = recommend_init()
 
-# Dataset class kullanarak veriyi dizilere aktarma
-d = Dataset()
-d.load_users("data/u.user", user)
-d.load_items("data/u.item", item)
-d.load_ratings("data/ua.base", rating)
-d.load_ratings("data/ua.test", rating_test)
+        n_users = len(user)
+        n_items = len(item)
 
-n_users = len(user)
-n_items = len(item)
-n_users
+        result = ant_colony_optimization(n_users, pcs_matrix)
 
-# utility user-item tablo sonucu olarak rating tutmaktadır.
-# NumPy sıfırlar işlevi, yalnızca sıfır içeren NumPy dizileri oluşturmanıza olanak sağlar.
-# Daha da önemlisi, bu işlev dizinin tam boyutlarını belirlemenizi sağlar.
-# Ayrıca tam veri türünü belirlemenize de olanak tanır.
-utility = np.zeros((n_users, n_items))
-for r in rating:
-    utility[r.user_id - 1][r.item_id - 1] = r.rating
+        clusterUser = []
+        clusterUser = createCluster(result)
+        # KNNalgorithm.getKNNalgorithm(clusterUser,1,1,1)
 
-# print(utility)
+        means = cluster_means(utility, clusterUser)
+        user = create_avg_user(user, n_users, utility)
 
-test = np.zeros((n_users, n_items))
-for r in rating_test:
-    test[r.user_id - 1][r.item_id - 1] = r.rating
+        maximCluster = 382
+        utility_copy = np.copy(utility)
+        for i in range(0, maximCluster):
+            for j in range(0, n_users):
+                if utility_copy[i][j] == 0:
+                    utility_copy[i][j] = predict(i + 1, j + 1, 2, n_users, pcs_matrix, user, clusterUser, maximCluster)
+        print("\rPrediction [User:Rating] = [%d:%d]" % (i, j))
 
-# clusteri kaldirdiğimizda ortalamayı nasıl bulup ekleyeceğiz.
-# prediction daki [cluster.labels_[j] yerine ne ekleycegiz
-pcs_matrix = np.zeros((n_users, n_users))
+        # test datası ile tehmin arasında MSE
+        y_true = []
+        y_pred = []
+        for i in range(0, n_users):
+            for j in range(0, n_items):
+                if test[i][j] > 0:
+                    y_true.append(test[i][j])
+                    y_pred.append(utility[i][j])
 
-for i in range(0, n_users):
-    for j in range(0, i):
-        if i != j:
-            A = utility[i]
-            B = utility[j]
-            pcs_matrix[i][j], _ = pearsonr(A, B)
-            # pcs_matrix[i][j] = pearson(i + 1, j + 1, utility, user)
-# print(pcs_matrix)
-graph = AntGraph(n_users, pcs_matrix)
-graph.reset_tau()
-num_iterations = 5
-# n_users = 5
-ant_colony = antcolony.AntColony(graph, 5, num_iterations)
-ant_colony.start()
-graph.delta_mat = isaverage(graph.delta_mat)
-result = connected_component_labelling(graph.delta_mat, 4)
+        print("Mean Squared Error: %f" % mean_squared_error(y_true, y_pred))
 
-clusterUser = []
-clusterUser = createCluster(result)
-# KNNalgorithm.getKNNalgorithm(clusterUser,1,1,1)
+        # 1 çözüm: knn ile mevcut Ant COlony optimization souçlarının eğitim ve test edilmesi. 0,97 mean square error hesapla
 
-means = cluster_means(utility, clusterUser)
-user = create_avg_user(user, n_users, utility)
+        # 2. çözüm user boş olan ratinglerini  o  kullanıcıya ait cluster ortalamalrı ile dolduralım ve klasik pearson yaklaımı ile tekrar başarı hesaplayalım.1,5
 
-print("\rSimilarity Matrix [%d:%d] = %f" % (i + 1, j + 1, pcs_matrix[i][j]))
-maximCluster=382
-utility_copy = np.copy(utility)
-for i in range(0, maximCluster):
-    for j in range(0, n_users):
-        if utility_copy[i][j] == 0:
-            utility_copy[i][j] = predict(i + 1, j + 1, 2, n_users, pcs_matrix, user, clusterUser, maximCluster)
-print("\rPrediction [User:Rating] = [%d:%d]" % (i, j))
 
-# test datası ile tehmin arasında MSE
-y_true = []
-y_pred = []
-for i in range(0, n_users):
-    for j in range(0, n_items):
-        if test[i][j] > 0:
-            y_true.append(test[i][j])
-            y_pred.append(utility[i][j])
-
-print("Mean Squared Error: %f" % mean_squared_error(y_true, y_pred))
+if __name__ == '__main__':
+    Recommend_cold_start.generate_init(10)
