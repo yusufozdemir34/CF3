@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 
-from classes import Dataset
+from classes import Dataset, createCluster, cluster_means, create_avg_user
 from classes import pearson
 from classes import predict
 from classes import isaverage
@@ -10,6 +10,7 @@ from ccl import connected_component_labelling
 from antgraph import AntGraph
 import antcolony
 from scipy.stats import pearsonr
+from knn import KNNalgorithm
 
 # verilerin tutulacağı diziler
 user = []
@@ -55,7 +56,7 @@ for i in range(0, n_users):
             pcs_matrix[i][j], _ = pearsonr(A, B)
             # pcs_matrix[i][j] = pearson(i + 1, j + 1, utility, user)
 # print(pcs_matrix)
-graph = AntGraph(n_users, utility)
+graph = AntGraph(n_users, pcs_matrix)
 graph.reset_tau()
 num_iterations = 5
 # n_users = 5
@@ -64,17 +65,21 @@ ant_colony.start()
 graph.delta_mat = isaverage(graph.delta_mat)
 result = connected_component_labelling(graph.delta_mat, 4)
 
+clusterUser = []
+clusterUser = createCluster(result)
+# KNNalgorithm.getKNNalgorithm(clusterUser,1,1,1)
 
+means = cluster_means(utility, clusterUser)
+user = create_avg_user(user, n_users, utility)
 
 print("\rSimilarity Matrix [%d:%d] = %f" % (i + 1, j + 1, pcs_matrix[i][j]))
-
+maximCluster=382
 utility_copy = np.copy(utility)
-for i in range(0, n_users):
-    for j in range(0, n_items):
+for i in range(0, maximCluster):
+    for j in range(0, n_users):
         if utility_copy[i][j] == 0:
-            utility_copy[i][j] = predict(i + 1, j + 1, 50, n_users, result, user, utility)
-# print("\rPrediction [User:Rating] = [%d:%d]" % (i, j))
-
+            utility_copy[i][j] = predict(i + 1, j + 1, 2, n_users, pcs_matrix, user, clusterUser, maximCluster)
+print("\rPrediction [User:Rating] = [%d:%d]" % (i, j))
 
 # test datası ile tehmin arasında MSE
 y_true = []
