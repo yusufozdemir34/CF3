@@ -9,6 +9,9 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import KFold
 from scipy.stats import pearsonr
+from ccl import connected_component_labelling
+from antgraph import AntGraph
+import antcolony
 
 
 class User:
@@ -254,3 +257,63 @@ def prediction_user_rating(X_train, y_train, X_test):
     # Predict the response for test dataset
     y_pred = knn.predict(X_test)
     return y_pred
+
+
+# clust with ant colony optimization
+def ant_colony_optimization(n_users, pcs_matrix):
+    graph = AntGraph(n_users, pcs_matrix)
+    graph.reset_tau()
+    num_iterations = 5
+    # n_users = 5
+    ant_colony = antcolony.AntColony(graph, 5, num_iterations)
+    ant_colony.start()
+    graph.delta_mat = isaverage(graph.delta_mat)
+    result = connected_component_labelling(graph.delta_mat, 4)
+    return result
+
+
+def recommend_init():
+    # verilerin tutulacağı diziler
+    user = []
+    item = []
+
+    rating = []
+    rating_test = []
+
+    # Dataset class kullanarak veriyi dizilere aktarma
+    d = Dataset()
+    d.load_users("data/u.user", user)
+    d.load_items("data/u.item", item)
+    d.load_ratings("data/ua.base", rating)
+    d.load_ratings("data/ua.test", rating_test)
+
+    n_users = len(user)
+    n_items = len(item)
+    n_users
+
+    # utility user-item tablo sonucu olarak rating tutmaktadır.
+    # NumPy sıfırlar işlevi, yalnızca sıfır içeren NumPy dizileri oluşturmanıza olanak sağlar.
+    # Daha da önemlisi, bu işlev dizinin tam boyutlarını belirlemenizi sağlar.
+    # Ayrıca tam veri türünü belirlemenize de olanak tanır.
+    utility = np.zeros((n_users, n_items))
+    for r in rating:
+        utility[r.user_id - 1][r.item_id - 1] = r.rating
+
+    # print(utility)
+
+    test = np.zeros((n_users, n_items))
+    for r in rating_test:
+        test[r.user_id - 1][r.item_id - 1] = r.rating
+
+    # clusteri kaldirdiğimizda ortalamayı nasıl bulup ekleyeceğiz.
+    # prediction daki [cluster.labels_[j] yerine ne ekleycegiz
+    pcs_matrix = np.zeros((n_users, n_users))
+
+    for i in range(0, n_users):
+        for j in range(0, i):
+            if i != j:
+                A = utility[i]
+                B = utility[j]
+                pcs_matrix[i][j], _ = pearsonr(A, B)
+
+    return user, item, rating, rating_test, test, pcs_matrix, utility
