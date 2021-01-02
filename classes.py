@@ -159,6 +159,19 @@ def norm(n_users, clustered_user, user, clusternumber):
     return normalize
 
 
+def choose_maxvalue_from_relation(delta_mat):
+    max_matrix = delta_mat.max(0)
+
+    # detamath ın içindeki en yüksek avg yi bul. sonra en yüksek avg ye bir de. diğerleri sıfırdır.
+    for j in range(0, np.size(delta_mat, 1)-1):
+        for i in range(0, np.size(delta_mat, 0)):
+            if delta_mat[i][j] == max_matrix[j]:
+                delta_mat[i][j] = 1
+            else:
+                delta_mat[i][j] = 0
+    return delta_mat
+
+
 def isaverage(delta_mat):
     avg = delta_mat.mean()
     for i in range(0, np.size(delta_mat, 0)):
@@ -267,8 +280,14 @@ def ant_colony_optimization(n_users, pcs_matrix):
     # n_users = 5
     ant_colony = antcolony.AntColony(graph, 5, num_iterations)
     ant_colony.start()
-    graph.delta_mat = isaverage(graph.delta_mat)
-    result = connected_component_labelling(graph.delta_mat, 4)
+    # graph.delta_mat = is_max(graph.delta_mat)
+    # result = connected_component_labelling(graph.delta_mat, 4)
+    return graph.delta_mat
+
+
+def prepare_for_cluster(result):
+    result = choose_maxvalue_from_relation(result)
+    result = connected_component_labelling(result, 4)
     return result
 
 
