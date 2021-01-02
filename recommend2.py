@@ -3,7 +3,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 
 from classes import Dataset, createCluster, cluster_means, create_avg_user, \
-    ant_colony_optimization, recommend_init
+    ant_colony_optimization, recommend_init, prepare_for_cluster
 from classes import predict
 
 
@@ -17,6 +17,8 @@ class Recommend_cold_start:
 
         result = ant_colony_optimization(n_users, pcs_matrix)
 
+        result = prepare_for_cluster(result)
+
         clusterUser = []
         clusterUser = createCluster(result)
         # KNNalgorithm.getKNNalgorithm(clusterUser,1,1,1)
@@ -24,7 +26,7 @@ class Recommend_cold_start:
         means = cluster_means(utility, clusterUser)
         user = create_avg_user(user, n_users, utility)
 
-        maximCluster = 382
+        maximCluster =max(clusterUser)
         utility_copy = np.copy(utility)
         for i in range(0, maximCluster):
             for j in range(0, n_users):
